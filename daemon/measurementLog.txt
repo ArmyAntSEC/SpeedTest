@@ -1,0 +1,2 @@
+timestamp	downloadMbps	uploadMbps
+2017-06-24T18:35:33.742058Z	10.5350781345	1.28396701589
