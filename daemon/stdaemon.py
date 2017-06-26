@@ -57,7 +57,7 @@ def doSpeedTestAndParse():
 #-----------------
 # Function to write a piece of data to the log file
 def writeAMeasurementResult( result ):
-	fileName = './measurementLog.txt'
+	fileName = '/var/log/speedtestMeasurementLog.txt'
 
 	outputString = "{}\t{}\t{}\n".format( result["timestamp"].strftime('%Y-%m-%dT%H:%M:%S.%fZ'), result["downloadMbps"], result["uploadMbps"] )	
 	
@@ -71,35 +71,10 @@ def writeAMeasurementResult( result ):
 	fout.write( outputString )
 	fout.close()
 
-#-----------------
-#signal handler to catch sigint
-def catchSigInt( signal, frame ):
-	global shouldTerm
-	shouldTerm = True
 
 #-----------------
-# Function to do repeated measurements
-def doRepeatedMeasurements( ):
-	global shouldTerm
-	shouldTerm = False
-
-	while shouldTerm == False:
-		start_time = time.time()
-		result = doSpeedTestAndParse()
-		writeAMeasurementResult( result )        	
-		print ( result )
-
-		elapsed_time = time.time() - start_time			
-		time.sleep ( 60*60 - elapsed_time )
-
-	eprint ( "Main loop ended" )		
-
-#-----------------
-# Start of main program
-
-#Register a signal handler
-signal.signal ( signal.SIGHUP, catchSigInt )
-
-# Start the main loop
-doRepeatedMeasurements()
+# Main program
+result = doSpeedTestAndParse()
+writeAMeasurementResult( result )
+print ( result )
 
