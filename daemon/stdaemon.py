@@ -3,12 +3,13 @@ import subprocess
 import json
 import sys
 import os
-import time
-import signal
 from datetime import datetime
 from datetime import tzinfo
 
-import sys
+import matplotlib
+matplotlib.use('Agg') 
+import matplotlib.pyplot as plt
+
 #-------------------
 # Error printing
 def eprint(*args, **kwargs):
@@ -54,27 +55,52 @@ def doSpeedTestAndParse():
 	result = parseSTOutput( stString )
 	return result
 
+logFileName = './speedtestMeasurementLog.txt'
+
 #-----------------
 # Function to write a piece of data to the log file
-def writeAMeasurementResult( result ):
-	fileName = '/var/log/speedtestMeasurementLog.txt'
+def writeAMeasurementResult( result ):	
 
 	outputString = "{}\t{}\t{}\n".format( result["timestamp"].strftime('%Y-%m-%dT%H:%M:%S.%fZ'), result["downloadMbps"], result["uploadMbps"] )	
 	
-	if (os.path.isfile( fileName) == False):
-		fout = open( fileName, 'w')
+	if (os.path.isfile( logFileName) == False):
+		fout = open( logFileName, 'w')
 		fout.write( 'timestamp\tdownloadMbps\tuploadMbps\n' )
 		fout.close()
 	
-	fout = open( fileName, 'a')	
+	fout = open( logFileName, 'a')	
 	fout.seek(0,os.SEEK_END)
 	fout.write( outputString )
 	fout.close()
+
+def parseLogFile():
+	fin = open( logFileName, 'r' )
+	fin.readline() #Read the header line
+	
+	line = fin.readline()
+	while ( line != '' ):
+		# Tokenize line and store as three arrays		
+		lineSplit = line.split("\t")
+
+		#TODO: add error handling here		
+		thisTimestamp = datetime.strptime( lineSplit[0], '%Y-%m-%dT%H:%M:%S.%fZ' )
+		thisDownloadMbps = float( lineSplit[1] )
+		thisUploadMbps = float( lineSplit[2] )		
+
+		line = fin.readline()
+	fin.close()
+
+def makePlots():
+	data = parseLogFile()
+
+	# Plot the arrays in data
 
 
 #-----------------
 # Main program
 result = doSpeedTestAndParse()
 writeAMeasurementResult( result )
-print ( result )
+
+# Now make plots
+makePlots()
 
