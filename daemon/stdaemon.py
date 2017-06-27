@@ -3,12 +3,16 @@ import subprocess
 import json
 import sys
 import os
+import time
 from datetime import datetime
 from datetime import tzinfo
 
+import numpy as np
+
 import matplotlib
-matplotlib.use('Agg') 
+#matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 #-------------------
 # Error printing
@@ -20,6 +24,8 @@ def eprint(*args, **kwargs):
 def parseSTOutput ( resultStr ):
 	try: 
 		jsonObj = json.loads( resultStr )
+
+		print ( json.dumps(jsonObj, indent=2, sort_keys=True) )
 
 		downloadMbps = jsonObj['download']/(1024.0*1024)
 		uploadMbps = jsonObj['upload']/(1024.0*1024)	
@@ -36,7 +42,7 @@ def parseSTOutput ( resultStr ):
 #-------------------
 # Function to call speedtest-cli and get json response
 def doSpeedtest():
-	if ( 0 ):
+	if ( 1 ):
 		try:		
 			proc = subprocess.Popen( ['./speedtest-cli', '--json'], stdout=subprocess.PIPE );		
 			result = proc.communicate()						
@@ -77,8 +83,11 @@ def parseLogFile():
 	fin = open( logFileName, 'r' )
 	fin.readline() #Read the header line
 	
-	line = fin.readline()
-	while ( line != '' ):
+	timestampList = []
+	downloadList = []
+	uploadList = []
+
+	for line in fin:
 		# Tokenize line and store as three arrays		
 		lineSplit = line.split("\t")
 
@@ -86,14 +95,32 @@ def parseLogFile():
 		thisTimestamp = datetime.strptime( lineSplit[0], '%Y-%m-%dT%H:%M:%S.%fZ' )
 		thisDownloadMbps = float( lineSplit[1] )
 		thisUploadMbps = float( lineSplit[2] )		
-
-		line = fin.readline()
+		#print ( str( thisTimestamp ) )
+		
+		timestampList.append( thisTimestamp )
+		downloadList.append( thisDownloadMbps )
+		uploadList.append( thisUploadMbps )
+	
 	fin.close()
+	
+	return {"timestamp": np.array(timestampList), 
+		"downloadMbps": np.array(downloadList), 
+		"uploadMbps": np.array(uploadList) }
+	
 
 def makePlots():
 	data = parseLogFile()
-
+	
 	# Plot the arrays in data
+
+	plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%dT%H:%M:%S'))
+	plt.gca().xaxis.set_major_locator(mdates.DayLocator())	
+	plt.plot( data["timestamp"], data["downloadMbps"], '.-' )	
+	plt.gcf().autofmt_xdate()
+	plt.show()
+	plt.savefig ( "image.png" )
+
+	
 
 
 #-----------------
