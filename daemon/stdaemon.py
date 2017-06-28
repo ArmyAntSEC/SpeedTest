@@ -112,17 +112,25 @@ def makePlots():
 	data = parseLogFile()
 	
 	# Plot the arrays in data
+	ax1 = plt.subplot(211)
+	ax2 = plt.subplot(212)
+	fig = ax1.figure
 
-	plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%dT%H:%M:%S'))
-	plt.gca().xaxis.set_major_locator(mdates.DayLocator())	
-	plt.plot( data["timestamp"], data["downloadMbps"], '.-' )	
-	plt.gcf().autofmt_xdate()
-	plt.show()
-	plt.savefig ( "image.png" )
+	ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+	ax1.xaxis.set_major_locator(mdates.DayLocator())	
+	ax1.plot( data["timestamp"], data["downloadMbps"], '.-' )		
+	ax1.set_ylabel ( "Download Speed [Mbit]")
+	
+	ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+	ax2.xaxis.set_major_locator(mdates.DayLocator())	
+	ax2.plot( data["timestamp"], data["uploadMbps"], '.-' )	
+	ax2.set_xlabel("Measurement date")
+	ax2.set_ylabel ( "Upload Speed [Mbit]")
+	
+	fig.autofmt_xdate()
+	fig.savefig ( "image.png" )
 
 	
-
-
 #-----------------
 # Main program
 result = doSpeedTestAndParse()
