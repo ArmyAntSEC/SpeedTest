@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 from __future__ import print_function
 import subprocess
 import json
@@ -10,7 +12,7 @@ from datetime import tzinfo
 import numpy as np
 
 import matplotlib
-#matplotlib.use('Agg') 
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
