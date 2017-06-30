@@ -7,6 +7,9 @@ from email.mime.multipart import MIMEMultipart
 
 import time
 
+import os
+os.chdir( "/opt/speedtest" )
+
 msg = MIMEMultipart()
 
 msg['Subject'] = "Hastighetsrapport [" + time.strftime("%Y-%m-%dT%H:%M:%S") + "]"
@@ -20,7 +23,7 @@ img = open( "image.png", 'rb').read()
 image = MIMEImage( img, name="image.png" )
 msg.attach( image )
 
-s = smtplib.SMTP('smtp.tre.se')
+s = smtplib.SMTP('smtp.bredband.net')
 s.set_debuglevel(False)
 s.sendmail( 'daniel@armyr.se', 'postmaster@armyr.se', msg.as_string() )
 s.quit

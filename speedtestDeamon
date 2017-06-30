@@ -16,6 +16,12 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
+import os
+
+#------------------
+# Change CWD to where our files are stored
+os.chdir( "/opt/speedtest/" )
+
 #-------------------
 # Error printing
 def eprint(*args, **kwargs):
