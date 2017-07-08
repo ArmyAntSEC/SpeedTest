@@ -20,24 +20,19 @@ import logging
 import os
 
 #-------------------
-# Error printing
-def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
-
-#-------------------
 # Function to parse json result returned from speedtest-cli
 def parseSTOutput ( resultStr ):
+	logger = logging.getLogger(__name__)
 	try: 
+		logger.debug("Parsing speedtest JSON object: %s", resultStr)
 		jsonObj = json.loads( resultStr )
-
-		#print ( json.dumps(jsonObj, indent=2, sort_keys=True) )
+		logger.debug(jsonObj)
 
 		downloadMbps = jsonObj['download']/(1024.0*1024)
 		uploadMbps = jsonObj['upload']/(1024.0*1024)	
 		timestamp = datetime.strptime( jsonObj['timestamp'], '%Y-%m-%dT%H:%M:%S.%fZ' )
 	except ValueError:
-		eprint ( "Error parsing SpeedTest result:")
-		eprint ( resultStr )
+		logger.error( "Error parsing SpeedTest result: %s", resultStr)		
 		downloadMbps = float('nan')
 		uploadMbps = float('nan')
 		timestamp = datetime.strptime( '1900-01-01', '%Y-%m-%d' )
@@ -47,13 +42,14 @@ def parseSTOutput ( resultStr ):
 #-------------------
 # Function to call speedtest-cli and get json response
 def doSpeedtest():
+	logger = logging.getLogger(__name__)
 	if ( 1 ):
 		try:		
 			proc = subprocess.Popen( ['./speedtest-cli', '--json'], stdout=subprocess.PIPE );		
 			result = proc.communicate()						
 			stString = result[0]
 		except:
-			eprint ( "Error calling speedtest-cli" )
+			logger.error( "Error running the speedtest subprocess" )
 			stString = ""
 	else:
 		stString = '{"bytes_sent": 2678784, "download": 11046830.089912508, "timestamp": "2017-06-24T18:35:33.742058Z", "share": null, "bytes_received": 13884164, "ping": 23.668, "upload": 1346336.9976509183, "server": {"latency": 23.668, "name": "Stockholm", "url": "http://speedtest1.dchosting.se/speedtest/upload.php", "country": "Sweden", "lon": "18.0686", "cc": "SE", "host": "speedtest1.dchosting.se:8080", "sponsor": "Datacom", "url2": "http://speedtest2.dchosting.se/speedtest/upload.php", "lat": "59.3294", "id": "8424", "d": 195.76265185298232}}'
