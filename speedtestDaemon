@@ -30,7 +30,7 @@ def parseSTOutput ( resultStr ):
 	try: 
 		jsonObj = json.loads( resultStr )
 
-		print ( json.dumps(jsonObj, indent=2, sort_keys=True) )
+		#print ( json.dumps(jsonObj, indent=2, sort_keys=True) )
 
 		downloadMbps = jsonObj['download']/(1024.0*1024)
 		uploadMbps = jsonObj['upload']/(1024.0*1024)	
@@ -141,7 +141,7 @@ def makePlots():
 #-----------------
 
 # Configure the logger
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.info ("Program starting")
 
