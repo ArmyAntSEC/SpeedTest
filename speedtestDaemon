@@ -20,26 +20,6 @@ import logging
 import os
 
 #-------------------
-# Function to parse json result returned from speedtest-cli
-def parseSTOutput ( resultStr ):
-	logger = logging.getLogger(__name__)
-	try: 
-		logger.debug("Parsing speedtest JSON object: %s", resultStr)
-		jsonObj = json.loads( resultStr )
-		logger.debug(jsonObj)
-
-		downloadMbps = jsonObj['download']/(1024.0*1024)
-		uploadMbps = jsonObj['upload']/(1024.0*1024)	
-		timestamp = datetime.strptime( jsonObj['timestamp'], '%Y-%m-%dT%H:%M:%S.%fZ' )
-	except ValueError:
-		logger.error( "Error parsing SpeedTest result: %s", resultStr)		
-		downloadMbps = float('nan')
-		uploadMbps = float('nan')
-		timestamp = datetime.strptime( '1900-01-01', '%Y-%m-%d' )
-	
-	return ( {'timestamp': timestamp, 'downloadMbps': downloadMbps, 'uploadMbps': uploadMbps } )	
-
-#-------------------
 # Function to call speedtest-cli and get json response
 def doSpeedtest():
 	logger = logging.getLogger(__name__)
@@ -56,23 +36,44 @@ def doSpeedtest():
 	return stString
 
 #-------------------
+# Function to parse json result returned from speedtest-cli
+def parseSTOutput ( resultStr ):
+	logger = logging.getLogger(__name__)
+	try: 
+		logger.debug("Parsing speedtest JSON object: %s", resultStr)
+		jsonObj = json.loads( resultStr )
+		logger.debug(jsonObj)
+
+		downloadMbps = jsonObj['download']/(1024.0*1024)
+		uploadMbps = jsonObj['upload']/(1024.0*1024)	
+		ping = jsonObj['ping']
+		timestamp = datetime.strptime( jsonObj['timestamp'], '%Y-%m-%dT%H:%M:%S.%fZ' )
+
+	except ValueError:
+		logger.error( "Error parsing SpeedTest result: %s", resultStr)		
+		downloadMbps = float('nan')
+		uploadMbps = float('nan')
+		ping = float('nan')
+		timestamp = datetime.strptime( '1900-01-01', '%Y-%m-%d' )
+	
+	return ( {'timestamp': timestamp, 'downloadMbps': downloadMbps, 'uploadMbps': uploadMbps, 'ping': ping } )	
+
+#-------------------
 # Function that calls speedtest-cli and parses result
 def doSpeedTestAndParse():
 	stString = doSpeedtest()
 	result = parseSTOutput( stString )
 	return result
 
-logFileName = './speedtestMeasurementLog.txt'
-
 #-----------------
 # Function to write a piece of data to the log file
-def writeAMeasurementResult( result ):	
+def writeAMeasurementResult( result, logFileName ):	
 
-	outputString = "{}\t{}\t{}\n".format( result["timestamp"].strftime('%Y-%m-%dT%H:%M:%S.%fZ'), result["downloadMbps"], result["uploadMbps"] )	
-	
+	outputString = "{}\t{}\t{}\t{}\n".format( result["timestamp"].strftime('%Y-%m-%dT%H:%M:%S.%fZ'), result["downloadMbps"], result["uploadMbps"], result["ping"] )	
+		
 	if (os.path.isfile( logFileName) == False):
 		fout = open( logFileName, 'w')
-		fout.write( 'timestamp\tdownloadMbps\tuploadMbps\n' )
+		fout.write( 'timestamp\tdownloadMbps\tuploadMbps\tping\n' )
 		fout.close()
 	
 	fout = open( logFileName, 'a')	
@@ -80,13 +81,14 @@ def writeAMeasurementResult( result ):
 	fout.write( outputString )
 	fout.close()
 
-def parseLogFile():
+def parseLogFile( logFileName ):
 	fin = open( logFileName, 'r' )
 	fin.readline() #Read the header line
 	
 	timestampList = []
 	downloadList = []
 	uploadList = []
+	pingList = []
 
 	for line in fin:
 		# Tokenize line and store as three arrays		
@@ -96,38 +98,47 @@ def parseLogFile():
 		thisTimestamp = datetime.strptime( lineSplit[0], '%Y-%m-%dT%H:%M:%S.%fZ' )
 		thisDownloadMbps = float( lineSplit[1] )
 		thisUploadMbps = float( lineSplit[2] )		
+		thisPing = float( lineSplit[3] )
 		#print ( str( thisTimestamp ) )
 		
 		timestampList.append( thisTimestamp )
 		downloadList.append( thisDownloadMbps )
 		uploadList.append( thisUploadMbps )
+		pingList.append( thisPing )
 	
 	fin.close()
 	
 	return {"timestamp": np.array(timestampList), 
 		"downloadMbps": np.array(downloadList), 
-		"uploadMbps": np.array(uploadList) }
+		"uploadMbps": np.array(uploadList), 
+		"ping": np.array(pingList) }
 	
 
-def makePlots():
-	data = parseLogFile()
+def makePlots(logFileName):
+	data = parseLogFile(logFileName)
 	
 	# Plot the arrays in data
-	ax1 = plt.subplot(211)
-	ax2 = plt.subplot(212)
+	ax1 = plt.subplot(311)
+	ax2 = plt.subplot(312)
+	ax3 = plt.subplot(313)
 	fig = ax1.figure
 
 	ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
 	ax1.xaxis.set_major_locator(mdates.DayLocator())	
 	ax1.plot( data["timestamp"], data["downloadMbps"], '.-' )		
-	ax1.set_ylabel ( "Download Speed [Mbit]")
+	ax1.set_ylabel ( "Down [Mbit]")
 	
 	ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
 	ax2.xaxis.set_major_locator(mdates.DayLocator())	
-	ax2.plot( data["timestamp"], data["uploadMbps"], '.-' )	
-	ax2.set_xlabel("Measurement date")
-	ax2.set_ylabel ( "Upload Speed [Mbit]")
+	ax2.plot( data["timestamp"], data["uploadMbps"], '.-' )		
+	ax2.set_ylabel ( "Up [Mbit]")
 	
+	ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+	ax3.xaxis.set_major_locator(mdates.DayLocator())	
+	ax3.plot( data["timestamp"], data["ping"], '.-' )	
+	ax3.set_xlabel("Measurement date")
+	ax3.set_ylabel ( "Ping [ms]")
+
 	fig.autofmt_xdate()
 	fig.savefig ( "image.png" )
 
@@ -137,7 +148,7 @@ def makePlots():
 #-----------------
 
 # Configure the logger
-logging.basicConfig()
+logging.basicConfig() #level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info ("Program starting")
 
@@ -149,9 +160,10 @@ logger.info ( "Program running in folder: %s", os.getcwd() )
 result = doSpeedTestAndParse()
 logger.debug( "Data received: %s", result )
 
-writeAMeasurementResult( result )
+logFileName = './speedtestMeasurementLog.txt'
+writeAMeasurementResult( result, logFileName )
 
 # Now make plots
-makePlots()
+makePlots( logFileName )
 
 logger.info ( "Program done" )
