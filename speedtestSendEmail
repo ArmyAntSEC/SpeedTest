@@ -1,8 +1,6 @@
 #!/usr/bin/python
-import smtplib
 
-# Use this method instead: https://stackoverflow.com/questions/73781/sending-mail-via-sendmail-from-python
-
+from subprocess import Popen, PIPE
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
@@ -25,7 +23,7 @@ img = open( "image.png", 'rb').read()
 image = MIMEImage( img, name="image.png" )
 msg.attach( image )
 
-s = smtplib.SMTP('smtp.bredband.net')
-s.set_debuglevel(False)
-s.sendmail( 'daniel@armyr.se', 'postmaster@armyr.se', msg.as_string() )
-s.quit
+## This method uses sendmail or equivalent rather than connect directly to the smtp server
+p = Popen( ["/usr/sbin/sendmail", "-t", "-oi"], stdin=PIPE )
+p.communicate( msg.as_string() )
+
