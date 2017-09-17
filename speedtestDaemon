@@ -126,21 +126,18 @@ def makePlots(logFileName):
 	ax3 = plt.subplot(313)
 	fig = ax1.figure
 
-	ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-	ax1.xaxis.set_major_locator(mdates.DayLocator())	
 	ax1.plot( data["timestamp"], data["downloadMbps"], '.-' )		
 	ax1.set_ylabel ( "Down [Mbit]")
+	ax1.xaxis_date()
 	
-	ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-	ax2.xaxis.set_major_locator(mdates.DayLocator())	
 	ax2.plot( data["timestamp"], data["uploadMbps"], '.-' )		
 	ax2.set_ylabel ( "Up [Mbit]")
+	ax2.xaxis_date()
 	
-	ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-	ax3.xaxis.set_major_locator(mdates.DayLocator())	
 	ax3.plot( data["timestamp"], data["ping"], '.-' )	
 	ax3.set_xlabel("Measurement date")
 	ax3.set_ylabel ( "Ping [ms]")
+	ax3.xaxis_date()
 
 	fig.autofmt_xdate()
 	fig.savefig ( "image.png" )
