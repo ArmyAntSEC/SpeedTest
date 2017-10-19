@@ -19,13 +19,15 @@ import matplotlib.dates as mdates
 import logging
 import os
 
+import speedtest
+
 #-------------------
 # Function to call speedtest-cli and get json response
 def doSpeedtest():
 	logger = logging.getLogger(__name__)
 	if ( 1 ):
 		try:		
-			proc = subprocess.Popen( ['./speedtest-cli', '--json'], stdout=subprocess.PIPE );		
+			proc = subprocess.Popen( ['/usr/local/bin/speedtest-cli', '--json'], stdout=subprocess.PIPE );		
 			result = proc.communicate()						
 			stString = result[0]
 		except:
