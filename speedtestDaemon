@@ -64,6 +64,28 @@ def parseSTOutput ( resultStr ):
 def doSpeedTestAndParse():
 	stString = doSpeedtest()
 	result = parseSTOutput( stString )
+
+	return result
+
+#-------------------
+# Function that calls speedtest-cli and parses result
+def doSpeedTestAndParseAPI():
+	servers = []
+	s = speedtest.Speedtest()
+	s.get_servers(servers)
+	s.get_best_server()
+	s.download()
+	s.upload()
+
+	result_raw = s.results.dict()
+
+	downloadMbps = result_raw['download']/(1024.0*1024)
+	uploadMbps = result_raw['upload']/(1024.0*1024)	
+	ping = result_raw['ping']		
+	timestamp = datetime.now()
+
+	result = {'timestamp': timestamp, 'downloadMbps': downloadMbps, 'uploadMbps': uploadMbps, 'ping': ping }
+
 	return result
 
 #-----------------
@@ -159,7 +181,7 @@ os.chdir( "/opt/speedtest/" )
 logger.info ( "Program running in folder: %s", os.getcwd() )
 
 # Run the core of the program
-result = doSpeedTestAndParse()
+result = doSpeedTestAndParseAPI()
 logger.debug( "Data received: %s", result )
 
 logFileName = './speedtestMeasurementLog.txt'
