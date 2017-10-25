@@ -4,18 +4,117 @@ import speedtest
 import logging
 import os
 
-def doSpeedtestAPI():
-	servers = []
-	s = speedtest.Speedtest()
-	s.get_servers(servers)
-	s.get_best_server()
-	s.download()
-	s.upload()
+import socket
+import random
+import string
 
-	results = s.results.dict()
+import subprocess
+import re #Regular expressions
+
+from datetime import datetime
+#from datetime import tzinfo
+
+def doSpeedtestAPI():
+	logger = logging.getLogger(__name__)
+	serversToAskFor = []
+	
+	try:
+		logger.debug( "Getting configuration" )
+		s = speedtest.Speedtest()	
+		logger.debug( "Asking for list of servers" )
+		s.get_servers(serversToAskFor)		
+		logger.debug( "Selecting best server" )	
+		s.get_best_server()
+		logger.debug( "Measuring download speed" )
+		s.download()
+		logger.debug( "Measuring upload speed" )
+		s.upload()
+		logger.debug( "Speed test complete" )
+
+		results_raw = s.results.dict()
+		
+		downloadMbps = results_raw['download']/(1024.0*1024)
+		uploadMbps = results_raw['upload']/(1024.0*1024)			
+
+		results = {'downloadMbps': downloadMbps, 'uploadMbps': uploadMbps }
+
+	except:
+		logger.exception( "Exception caught trying to perform speed test" )
+		results = {'downloadMbps': 0, 'uploadMbps': 0 }
+
 
 	return results
 
+def fpingAndGetStats( addresses ):
+	logger = logging.getLogger(__name__)
+	stats = {}
+	try:		
+		# Run fping with 10 packages of random data, showing only final stats.		
+		proc = subprocess.Popen( ['/usr/local/bin/fping', '--count=3', '-q', '-R'] + addresses, stderr=subprocess.PIPE );		
+		result = proc.communicate()						
+		stString = result[1]
+		logger.debug ( stString )
+		# sample string: "kth.se : xmt/rcv/%loss = 10/10/0%, min/avg/max = 3.69/23.6/122"
+
+		reg = re.compile ( r"(?P<server>\S+)\s+: xmt/rcv/%loss = (?:[\d\.]+)/(?:[\d\.]+)/(?P<loss>[\d\.]+)%(?:, min/avg/max = (?:[\d\.]+)/(?P<avgPing>[\d\.]+)/(?:[\d\.]+))?" )
+		startPos = 0;
+		while ( True ):			
+			match = reg.search( stString, startPos )
+			if match == None:
+				break						
+
+			server = match.group('server')
+
+			loss = float(match.group('loss'))			
+			if loss == None:
+				loss = float('nan')			
+			loss = float(loss)			
+			
+			avgPing = match.group('avgPing')
+			if avgPing == None:
+				avgPing = float('nan')
+			avgPing = float(avgPing)
+
+
+			theseStats = {'loss': loss, 'avgPing': avgPing}
+			
+			logger.debug( (server, theseStats) )
+			
+			stats[server] = theseStats;			
+			startPos = match.end(0)
+		
+
+	except:
+		logger.exception( "Error doing internet connectivity check" )
+		
+	return stats
+
+def doHostnameResolution():
+	
+	allOK = False
+	try:
+		response = socket.gethostbyname( 'kth.se' )
+		logger.debug( "Result of resolving kth.se: %s", response )
+		allOK = True
+	except:
+		logger.exception( "Error doing DNS resolution" )
+		allOK = False
+
+	return allOK
+
+def doAllMeasurements():
+	logger = logging.getLogger(__name__)
+
+	dnsOK = doHostnameResolution()
+	logger.info( 'DNS OK: %d', dnsOK )
+
+	pingStats = fpingAndGetStats( ['8.8.8.8', 'kth.se', 'bredbandsbolaget.se'] )
+	logger.info ( pingStats )
+
+	speedMeasurement = doSpeedtestAPI()
+	logger.info ( speedMeasurement )
+
+	return {'dnsOK': dnsOK, 'pingStats': pingStats, 'speedMeasurement': speedMeasurement}
 
 #-----------------
 # Main program
@@ -30,8 +129,10 @@ logger.info ("Program starting")
 os.chdir( "/opt/speedtest/" ) 
 logger.info ( "Program running in folder: %s", os.getcwd() )
 
-# Run the core of the program
-result = doSpeedtestAPI()
-logger.debug( "Data received: %s", result )
+
+allResults = doAllMeasurements()
+logger.debug(allResults)
+
+
 
 logger.info ( "Program done" )
