@@ -13,6 +13,12 @@ import re #Regular expressions
 
 import numpy as np
 
+import matplotlib
+matplotlib.use('Agg') 
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+
 from datetime import datetime
 #from datetime import tzinfo
 
@@ -157,8 +163,7 @@ def parseLogFile( logFileName ):
 	googleLossList = []
 	googleAvgPingList = []
 	downloadList = []
-	uploadList = []
-	pingList = []
+	uploadList = []	
 
 	for line in fin:
 		# Tokenize line and store as arrays		
@@ -198,17 +203,38 @@ def parseLogFile( logFileName ):
 	
 	lossArray = np.transpose(np.vstack( (np.array(bbbLossList), np.array(kthLossList), np.array(googleLossList)) ))
 	pingAvgArray = np.transpose(np.vstack( (np.array(bbbAvgPingList), np.array(kthAvgPingList), 
-		np.array(googleAvgPingList)) ))
-
-	logger.debug ( lossArray.shape )
+		np.array(googleAvgPingList)) ))	
 
 	return {"timestamp": np.array(timestampList), 
-		"loss": lossArray,
+		"dnsOK": np.array(dnsOKList),
+		"loss": lossArray,		
 		"pingAvg": pingAvgArray,
 		"downloadMbps": np.array(downloadList), 
-		"uploadMbps": np.array(uploadList), 
-		"ping": np.array(pingList) }
+		"uploadMbps": np.array(uploadList) }
 	
+def makePlots(logFileName):
+	data = parseLogFile(logFileName)
+	
+	# Plot the arrays in data
+	ax1 = plt.subplot(311)
+	ax2 = plt.subplot(312)
+	ax3 = plt.subplot(313)
+	fig = ax1.figure
+
+	ax1.plot( data["timestamp"], data["downloadMbps"], 'b.-', data["timestamp"], data["uploadMbps"], 'r.-' )		
+	ax1.set_ylabel ( "[Mbit]")
+	ax1.legend ( ['Download', 'Upload'], 'upper left' )
+	ax1.xaxis_date()
+
+
+	ax3.plot( data["timestamp"], data["dnsOK"], '.-' )		
+	ax3.set_ylabel ( "DNS OK?")	
+	ax3.set_xlabel("Measurement date")
+	ax3.xaxis_date()		
+	
+	fig.autofmt_xdate()
+	fig.savefig ( "image.png" )
+
 
 #-----------------
 # Main program
@@ -223,14 +249,12 @@ logger.info ("Program starting")
 os.chdir( "/opt/speedtest/" ) 
 logger.info ( "Program running in folder: %s", os.getcwd() )
 
-
-#allResults = doAllMeasurements()
+allResults = doAllMeasurements()
 #logger.debug(allResults)
 
 logFileName = './speedtestMeasurementLog.txt'
-#writeAMeasurementResult( allResults, logFileName )
+writeAMeasurementResult( allResults, logFileName )
 
-parsedLog = parseLogFile( logFileName )
-logger.debug( parsedLog )
+makePlots( logFileName )
 
 logger.info ( "Program done" )
