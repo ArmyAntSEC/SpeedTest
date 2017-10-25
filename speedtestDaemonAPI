@@ -11,6 +11,8 @@ import string
 import subprocess
 import re #Regular expressions
 
+import numpy as np
+
 from datetime import datetime
 #from datetime import tzinfo
 
@@ -50,7 +52,7 @@ def fpingAndGetStats( addresses ):
 	stats = {}
 	try:		
 		# Run fping with 10 packages of random data, showing only final stats.		
-		proc = subprocess.Popen( ['/usr/local/bin/fping', '--count=3', '-q', '-R'] + addresses, stderr=subprocess.PIPE );		
+		proc = subprocess.Popen( ['/usr/local/bin/fping', '--count=10', '-q', '-R'] + addresses, stderr=subprocess.PIPE );		
 		result = proc.communicate()						
 		stString = result[1]
 		logger.debug ( stString )
@@ -114,7 +116,99 @@ def doAllMeasurements():
 	speedMeasurement = doSpeedtestAPI()
 	logger.info ( speedMeasurement )
 
-	return {'dnsOK': dnsOK, 'pingStats': pingStats, 'speedMeasurement': speedMeasurement}
+	return {'timestamp': datetime.now(), 'dnsOK': dnsOK, 'pingStats': pingStats, 'speedMeasurement': speedMeasurement}
+
+def writeAMeasurementResult( result, logFileName ):	
+
+	outputString = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format( 
+		result["timestamp"].strftime('%Y-%m-%dT%H:%M:%S.%fZ'), 
+		int(result['dnsOK']), 
+		result['pingStats']['bredbandsbolaget.se']['loss'],
+		result['pingStats']['bredbandsbolaget.se']['avgPing'],
+		result['pingStats']['kth.se']['loss'],
+		result['pingStats']['kth.se']['avgPing'],
+		result['pingStats']['8.8.8.8']['loss'],
+		result['pingStats']['8.8.8.8']['avgPing'],
+		result['speedMeasurement']["downloadMbps"], 
+		result['speedMeasurement']["uploadMbps"] )	
+		
+	if (os.path.isfile( logFileName) == False):
+		fout = open( logFileName, 'w')
+		fout.write( 'timestamp\tdnsOK\tbbbLoss\tbbbPingAvg\tkthLoss\tkthPingAvg\tgoogleLoss\tgooglePingAvg\tdownloadMbps\tuploadMbps\n' )
+		fout.close()
+	
+	fout = open( logFileName, 'a')	
+	fout.seek(0,os.SEEK_END)
+	fout.write( outputString )
+	fout.close()
+
+def parseLogFile( logFileName ):
+	logger = logging.getLogger(__name__)
+
+	fin = open( logFileName, 'r' )
+	fin.readline() #Read the header line
+	
+	timestampList = []
+	dnsOKList = []
+	bbbLossList = []
+	bbbAvgPingList = []
+	kthLossList = []
+	kthAvgPingList = []
+	googleLossList = []
+	googleAvgPingList = []
+	downloadList = []
+	uploadList = []
+	pingList = []
+
+	for line in fin:
+		# Tokenize line and store as arrays		
+		lineSplit = line.split("\t")
+
+		try:
+			thisTimestamp = datetime.strptime( lineSplit[0], '%Y-%m-%dT%H:%M:%S.%fZ' )
+			thisDnsOK = int(lineSplit[1])
+			thisBbbLoss = float(lineSplit[2])
+			thisBbbPingAvg = float(lineSplit[3])
+			thisKthLoss = float(lineSplit[4])
+			thisKthPingAvg = float(lineSplit[5])
+			thisGoogleLoss = float(lineSplit[6])
+			thisGooglePingAvg = float(lineSplit[7])
+			thisDownloadMbps = float(lineSplit[8])
+			thisUploadMbps = float(lineSplit[9])
+		except:
+			logger.error ( "Could not parse log file. Moving on. Bad line: [%s]", line )
+		
+		timestampList.append( thisTimestamp )
+		
+		dnsOKList.append(thisDnsOK)
+
+		bbbLossList.append(thisBbbLoss)
+		bbbAvgPingList.append(thisBbbPingAvg)
+		kthLossList.append(thisKthLoss)
+		kthAvgPingList.append(thisKthPingAvg)
+		googleLossList.append(thisGoogleLoss)
+		googleAvgPingList.append(thisGooglePingAvg)
+
+		downloadList.append( thisDownloadMbps )
+		uploadList.append( thisUploadMbps )		
+	
+	fin.close()
+	
+	pingServers = ['bredbandsbolaget.se', 'kth.se', '8.8.8.8']
+	
+	lossArray = np.transpose(np.vstack( (np.array(bbbLossList), np.array(kthLossList), np.array(googleLossList)) ))
+	pingAvgArray = np.transpose(np.vstack( (np.array(bbbAvgPingList), np.array(kthAvgPingList), 
+		np.array(googleAvgPingList)) ))
+
+	logger.debug ( lossArray.shape )
+
+	return {"timestamp": np.array(timestampList), 
+		"loss": lossArray,
+		"pingAvg": pingAvgArray,
+		"downloadMbps": np.array(downloadList), 
+		"uploadMbps": np.array(uploadList), 
+		"ping": np.array(pingList) }
+	
 
 #-----------------
 # Main program
@@ -130,9 +224,13 @@ os.chdir( "/opt/speedtest/" )
 logger.info ( "Program running in folder: %s", os.getcwd() )
 
 
-allResults = doAllMeasurements()
-logger.debug(allResults)
+#allResults = doAllMeasurements()
+#logger.debug(allResults)
 
+logFileName = './speedtestMeasurementLog.txt'
+#writeAMeasurementResult( allResults, logFileName )
 
+parsedLog = parseLogFile( logFileName )
+logger.debug( parsedLog )
 
 logger.info ( "Program done" )
