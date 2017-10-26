@@ -1,13 +1,15 @@
 #!/usr/bin/python
 
-from __future__ import print_function
-import subprocess
-import json
-import sys
+import speedtest
+import logging
 import os
-import time
-from datetime import datetime
-from datetime import tzinfo
+
+import socket
+import random
+import string
+
+import subprocess
+import re #Regular expressions
 
 import numpy as np
 
@@ -16,87 +18,140 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-import logging
-import os
 
-import speedtest
+from datetime import datetime
+#from datetime import tzinfo
 
-#-------------------
-# Function to call speedtest-cli and get json response
-def doSpeedtest():
+def doSpeedtestAPI():
 	logger = logging.getLogger(__name__)
-	if ( 1 ):
-		try:		
-			proc = subprocess.Popen( ['/usr/local/bin/speedtest-cli', '--json'], stdout=subprocess.PIPE );		
-			result = proc.communicate()						
-			stString = result[0]
-		except:
-			logger.error( "Error running the speedtest subprocess" )
-			stString = ""
-	else:
-		stString = '{"bytes_sent": 2678784, "download": 11046830.089912508, "timestamp": "2017-06-24T18:35:33.742058Z", "share": null, "bytes_received": 13884164, "ping": 23.668, "upload": 1346336.9976509183, "server": {"latency": 23.668, "name": "Stockholm", "url": "http://speedtest1.dchosting.se/speedtest/upload.php", "country": "Sweden", "lon": "18.0686", "cc": "SE", "host": "speedtest1.dchosting.se:8080", "sponsor": "Datacom", "url2": "http://speedtest2.dchosting.se/speedtest/upload.php", "lat": "59.3294", "id": "8424", "d": 195.76265185298232}}'
-	return stString
-
-#-------------------
-# Function to parse json result returned from speedtest-cli
-def parseSTOutput ( resultStr ):
-	logger = logging.getLogger(__name__)
-	try: 
-		logger.debug("Parsing speedtest JSON object: %s", resultStr)
-		jsonObj = json.loads( resultStr )
-		logger.debug(jsonObj)
-
-		downloadMbps = jsonObj['download']/(1024.0*1024)
-		uploadMbps = jsonObj['upload']/(1024.0*1024)	
-		ping = jsonObj['ping']		
-
-	except ValueError:
-		logger.error( "Error parsing SpeedTest return data: [%s]", resultStr)		
-		downloadMbps = 0
-		uploadMbps = 0
-		ping = float('nan')		
+	serversToAskFor = []
 	
-	timestamp = datetime.now()
-	return ( {'timestamp': timestamp, 'downloadMbps': downloadMbps, 'uploadMbps': uploadMbps, 'ping': ping } )	
+	results = {'downloadMbps': 0, 'uploadMbps': 0 }
 
-#-------------------
-# Function that calls speedtest-cli and parses result
-def doSpeedTestAndParse():
-	stString = doSpeedtest()
-	result = parseSTOutput( stString )
+	try:
+		logger.debug( "Getting configuration" )
+		s = speedtest.Speedtest()	
+		logger.debug( "Asking for list of servers" )
+		s.get_servers(serversToAskFor)		
+		logger.debug( "Selecting best server" )	
+		s.get_best_server()
+		logger.debug( "Measuring download speed" )
+		s.download()
+		logger.debug( "Measuring upload speed" )
+		s.upload()
+		logger.debug( "Speed test complete" )
 
-	return result
+		results_raw = s.results.dict()
+		
+		downloadMbps = results_raw['download']/(1024.0*1024)
+		uploadMbps = results_raw['upload']/(1024.0*1024)			
 
-#-------------------
-# Function that calls speedtest-cli and parses result
-def doSpeedTestAndParseAPI():
-	servers = []
-	s = speedtest.Speedtest()
-	s.get_servers(servers)
-	s.get_best_server()
-	s.download()
-	s.upload()
+		results = {'downloadMbps': downloadMbps, 'uploadMbps': uploadMbps }
 
-	result_raw = s.results.dict()
+	except speedtest.ConfigRetrievalError:
+		logger.error( 'Could not get configuration from speedtest server. No speed measurement possible.' )
+	except:
+		logger.exception( "Unexpected error caught trying to perform speed test" )
+		
 
-	downloadMbps = result_raw['download']/(1024.0*1024)
-	uploadMbps = result_raw['upload']/(1024.0*1024)	
-	ping = result_raw['ping']		
-	timestamp = datetime.now()
 
-	result = {'timestamp': timestamp, 'downloadMbps': downloadMbps, 'uploadMbps': uploadMbps, 'ping': ping }
+	return results
 
-	return result
+def fpingAndGetStats( addresses ):
+	logger = logging.getLogger(__name__)
+	stats = {}
 
-#-----------------
-# Function to write a piece of data to the log file
+	# Prepopulate the return struct with error values to be overwritten if things work out.
+	for server in addresses:
+		stats[server] = {'loss': 100.0, 'avgPing': float('nan')}
+
+	try:		
+		# Run fping with 10 packages of random data, showing only final stats.		
+		proc = subprocess.Popen( ['/usr/local/bin/fping', '--count=10', '-q', '-R'] + addresses, stderr=subprocess.PIPE );		
+		result = proc.communicate()						
+		stString = result[1]
+		logger.debug ( stString )
+		# sample string: "kth.se : xmt/rcv/%loss = 10/10/0%, min/avg/max = 3.69/23.6/122"
+
+		reg = re.compile ( r"(?P<server>\S+)\s+: xmt/rcv/%loss = (?:[\d\.]+)/(?:[\d\.]+)/(?P<loss>[\d\.]+)%(?:, min/avg/max = (?:[\d\.]+)/(?P<avgPing>[\d\.]+)/(?:[\d\.]+))?" )
+		startPos = 0;
+		while ( True ):			
+			match = reg.search( stString, startPos )
+			if match == None:
+				break						
+
+			server = match.group('server')
+
+			loss = float(match.group('loss'))			
+			if loss == None:
+				loss = float('nan')			
+			loss = float(loss)			
+			
+			avgPing = match.group('avgPing')
+			if avgPing == None:
+				avgPing = float('nan')
+			avgPing = float(avgPing)
+
+
+			theseStats = {'loss': loss, 'avgPing': avgPing}
+			
+			logger.debug( (server, theseStats) )
+			
+			stats[server] = theseStats;			
+			startPos = match.end(0)
+		
+	except:
+		logger.exception( "Error doing internet connectivity check" )
+		
+	return stats
+
+def doHostnameResolution():
+	
+	allOK = False
+	try:
+		response = socket.gethostbyname( 'kth.se' )
+		logger.debug( "Result of resolving kth.se: %s", response )
+		allOK = True	
+	except socket.gaierror:
+		logger.error( "DNS resolution failed. Probably no internet connection." )
+	except:
+		logger.error( "Unexpected error doing DNS resolution" )
+	
+		
+
+	return allOK
+
+def doAllMeasurements():
+	logger = logging.getLogger(__name__)
+
+	dnsOK = doHostnameResolution()
+	logger.info( 'DNS OK: %d', dnsOK )
+
+	pingStats = fpingAndGetStats( ['8.8.8.8', 'kth.se', 'bredbandsbolaget.se'] )
+	logger.info ( pingStats )
+
+	speedMeasurement = doSpeedtestAPI()
+	logger.info ( speedMeasurement )
+
+	return {'timestamp': datetime.now(), 'dnsOK': dnsOK, 'pingStats': pingStats, 'speedMeasurement': speedMeasurement}
+
 def writeAMeasurementResult( result, logFileName ):	
 
-	outputString = "{}\t{}\t{}\t{}\n".format( result["timestamp"].strftime('%Y-%m-%dT%H:%M:%S.%fZ'), result["downloadMbps"], result["uploadMbps"], result["ping"] )	
+	outputString = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format( 
+		result["timestamp"].strftime('%Y-%m-%dT%H:%M:%S.%fZ'), 
+		int(result['dnsOK']), 
+		result['pingStats']['bredbandsbolaget.se']['loss'],
+		result['pingStats']['bredbandsbolaget.se']['avgPing'],
+		result['pingStats']['kth.se']['loss'],
+		result['pingStats']['kth.se']['avgPing'],
+		result['pingStats']['8.8.8.8']['loss'],
+		result['pingStats']['8.8.8.8']['avgPing'],
+		result['speedMeasurement']["downloadMbps"], 
+		result['speedMeasurement']["uploadMbps"] )	
 		
 	if (os.path.isfile( logFileName) == False):
 		fout = open( logFileName, 'w')
-		fout.write( 'timestamp\tdownloadMbps\tuploadMbps\tping\n' )
+		fout.write( 'timestamp\tdnsOK\tbbbLoss\tbbbPingAvg\tkthLoss\tkthPingAvg\tgoogleLoss\tgooglePingAvg\tdownloadMbps\tuploadMbps\n' )
 		fout.close()
 	
 	fout = open( logFileName, 'a')	
@@ -111,36 +166,63 @@ def parseLogFile( logFileName ):
 	fin.readline() #Read the header line
 	
 	timestampList = []
+	dnsOKList = []
+	bbbLossList = []
+	bbbAvgPingList = []
+	kthLossList = []
+	kthAvgPingList = []
+	googleLossList = []
+	googleAvgPingList = []
 	downloadList = []
-	uploadList = []
-	pingList = []
+	uploadList = []	
 
 	for line in fin:
-		# Tokenize line and store as three arrays		
+		# Tokenize line and store as arrays		
 		lineSplit = line.split("\t")
 
 		try:
 			thisTimestamp = datetime.strptime( lineSplit[0], '%Y-%m-%dT%H:%M:%S.%fZ' )
-			thisDownloadMbps = float( lineSplit[1] )
-			thisUploadMbps = float( lineSplit[2] )		
-			thisPing = float( lineSplit[3] )
+			thisDnsOK = int(lineSplit[1])
+			thisBbbLoss = float(lineSplit[2])
+			thisBbbPingAvg = float(lineSplit[3])
+			thisKthLoss = float(lineSplit[4])
+			thisKthPingAvg = float(lineSplit[5])
+			thisGoogleLoss = float(lineSplit[6])
+			thisGooglePingAvg = float(lineSplit[7])
+			thisDownloadMbps = float(lineSplit[8])
+			thisUploadMbps = float(lineSplit[9])
 		except:
 			logger.error ( "Could not parse log file. Moving on. Bad line: [%s]", line )
 		
-		
 		timestampList.append( thisTimestamp )
+		
+		dnsOKList.append(thisDnsOK)
+
+		bbbLossList.append(thisBbbLoss)
+		bbbAvgPingList.append(thisBbbPingAvg)
+		kthLossList.append(thisKthLoss)
+		kthAvgPingList.append(thisKthPingAvg)
+		googleLossList.append(thisGoogleLoss)
+		googleAvgPingList.append(thisGooglePingAvg)
+
 		downloadList.append( thisDownloadMbps )
-		uploadList.append( thisUploadMbps )
-		pingList.append( thisPing )
+		uploadList.append( thisUploadMbps )		
 	
 	fin.close()
 	
-	return {"timestamp": np.array(timestampList), 
-		"downloadMbps": np.array(downloadList), 
-		"uploadMbps": np.array(uploadList), 
-		"ping": np.array(pingList) }
+	pingServers = ['bredbandsbolaget.se', 'kth.se', '8.8.8.8']
 	
+	lossArray = np.transpose(np.vstack( (np.array(bbbLossList), np.array(kthLossList), np.array(googleLossList)) ))
+	pingAvgArray = np.transpose(np.vstack( (np.array(bbbAvgPingList), np.array(kthAvgPingList), 
+		np.array(googleAvgPingList)) ))	
 
+	return {"timestamp": np.array(timestampList), 
+		"dnsOK": np.array(dnsOKList),
+		"loss": lossArray,		
+		"pingAvg": pingAvgArray,
+		"downloadMbps": np.array(downloadList), 
+		"uploadMbps": np.array(uploadList) }
+	
 def makePlots(logFileName):
 	data = parseLogFile(logFileName)
 	
@@ -148,31 +230,41 @@ def makePlots(logFileName):
 	ax1 = plt.subplot(311)
 	ax2 = plt.subplot(312)
 	ax3 = plt.subplot(313)
+	ax4 = ax3.twinx() #A second axis on top of ax3
 	fig = ax1.figure
 
-	ax1.plot( data["timestamp"], data["downloadMbps"], '.-' )		
-	ax1.set_ylabel ( "Down [Mbit]")
+	ax1.plot( data["timestamp"], data["downloadMbps"], 'b.-', data["timestamp"], data["uploadMbps"], 'r.-' )		
+	ax1.set_ylabel ( "[Mbit]")
+	ax1.legend ( ['Download', 'Upload'], 'upper left', prop={'size': 10} )
 	ax1.xaxis_date()
-	
-	ax2.plot( data["timestamp"], data["uploadMbps"], '.-' )		
-	ax2.set_ylabel ( "Up [Mbit]")
-	ax2.xaxis_date()
-	
-	ax3.plot( data["timestamp"], data["ping"], '.-' )	
-	ax3.set_xlabel("Measurement date")
-	ax3.set_ylabel ( "Ping [ms]")
-	ax3.xaxis_date()
 
+	ax2.plot( data["timestamp"], data["pingAvg"], '.-')		
+	ax2.set_ylabel ( "Avg ping [ms]")
+	ax2.legend ( ['BBB', 'KTH', 'Google'], 'upper left', prop={'size': 10} )	
+	ax2.xaxis_date()
+
+	ax3.plot( data["timestamp"], data["loss"], '.-' )		
+	ax3.set_ylabel ( "[%]")	
+	ax3.legend ( ['BBB', 'KTH', 'Google'], 'upper left', prop={'size': 10} )	
+	ax3.set_xlabel("Measurement date")
+	ax3.xaxis_date()		
+	
+	ax4.plot( data["timestamp"], data["dnsOK"], 'c.--' )		
+	ax4.set_ylim(-0.1,1.1)
+	ax4.set_ylabel ( "DNS OK?", color='c')
+	ax4.tick_params('y', color='c')			
+	ax4.xaxis_date()		
+	
 	fig.autofmt_xdate()
 	fig.savefig ( "image.png" )
 
-	
+
 #-----------------
 # Main program
 #-----------------
 
 # Configure the logger
-logging.basicConfig() # level=logging.DEBUG)
+logging.basicConfig() #level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info ("Program starting")
 
@@ -180,14 +272,12 @@ logger.info ("Program starting")
 os.chdir( "/opt/speedtest/" ) 
 logger.info ( "Program running in folder: %s", os.getcwd() )
 
-# Run the core of the program
-result = doSpeedTestAndParseAPI()
-logger.debug( "Data received: %s", result )
+allResults = doAllMeasurements()
+logger.debug(allResults)
 
 logFileName = './speedtestMeasurementLog.txt'
-writeAMeasurementResult( result, logFileName )
+writeAMeasurementResult( allResults, logFileName )
 
-# Now make plots
 makePlots( logFileName )
 
 logger.info ( "Program done" )
