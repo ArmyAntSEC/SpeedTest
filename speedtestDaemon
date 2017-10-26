@@ -63,11 +63,11 @@ def fpingAndGetStats( addresses ):
 
 	# Prepopulate the return struct with error values to be overwritten if things work out.
 	for server in addresses:
-		stats[server] = {'loss': 100.0, 'avgPing': float('nan')}
+		stats[server] = {'loss': 100.0, 'avgPing': 0}
 
 	try:		
-		# Run fping with 10 packages of random data, showing only final stats.		
-		proc = subprocess.Popen( ['/usr/local/bin/fping', '--count=10', '-q', '-R'] + addresses, stderr=subprocess.PIPE );		
+		# Run fping with 10 packages, showing only final stats.		
+		proc = subprocess.Popen( ['/usr/bin/fping', '-c 10', '-q'] + addresses, stderr=subprocess.PIPE );		
 		result = proc.communicate()						
 		stString = result[1]
 		logger.debug ( stString )
@@ -235,17 +235,17 @@ def makePlots(logFileName):
 
 	ax1.plot( data["timestamp"], data["downloadMbps"], 'b.-', data["timestamp"], data["uploadMbps"], 'r.-' )		
 	ax1.set_ylabel ( "[Mbit]")
-	ax1.legend ( ['Download', 'Upload'], 'upper left', prop={'size': 10} )
+	ax1.legend ( ['Download', 'Upload'], loc='upper left', prop={'size': 10} )
 	ax1.xaxis_date()
 
 	ax2.plot( data["timestamp"], data["pingAvg"], '.-')		
 	ax2.set_ylabel ( "Avg ping [ms]")
-	ax2.legend ( ['BBB', 'KTH', 'Google'], 'upper left', prop={'size': 10} )	
+	ax2.legend ( ['BBB', 'KTH', 'Google'], loc='upper left', prop={'size': 10} )	
 	ax2.xaxis_date()
 
 	ax3.plot( data["timestamp"], data["loss"], '.-' )		
 	ax3.set_ylabel ( "[%]")	
-	ax3.legend ( ['BBB', 'KTH', 'Google'], 'upper left', prop={'size': 10} )	
+	ax3.legend ( ['BBB', 'KTH', 'Google'], loc='upper left', prop={'size': 10} )	
 	ax3.set_xlabel("Measurement date")
 	ax3.xaxis_date()		
 	
