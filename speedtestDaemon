@@ -127,7 +127,7 @@ def doAllMeasurements():
 	dnsOK = doHostnameResolution()
 	logger.info( 'DNS OK: %d', dnsOK )
 
-	pingStats = fpingAndGetStats( ['8.8.8.8', 'kth.se', 'bredbandsbolaget.se'] )
+	pingStats = fpingAndGetStats( ['8.8.8.8', 'kth.se', 'bahnhof.se'] )
 	logger.info ( pingStats )
 
 	speedMeasurement = doSpeedtestAPI()
@@ -140,8 +140,8 @@ def writeAMeasurementResult( result, logFileName ):
 	outputString = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format( 
 		result["timestamp"].strftime('%Y-%m-%dT%H:%M:%S.%fZ'), 
 		int(result['dnsOK']), 
-		result['pingStats']['bredbandsbolaget.se']['loss'],
-		result['pingStats']['bredbandsbolaget.se']['avgPing'],
+		result['pingStats']['bahnhof.se']['loss'],
+		result['pingStats']['bahnhof.se']['avgPing'],
 		result['pingStats']['kth.se']['loss'],
 		result['pingStats']['kth.se']['avgPing'],
 		result['pingStats']['8.8.8.8']['loss'],
@@ -210,7 +210,7 @@ def parseLogFile( logFileName ):
 	
 	fin.close()
 	
-	pingServers = ['bredbandsbolaget.se', 'kth.se', '8.8.8.8']
+	pingServers = ['bahnhof.se', 'kth.se', '8.8.8.8']
 	
 	lossArray = np.transpose(np.vstack( (np.array(bbbLossList), np.array(kthLossList), np.array(googleLossList)) ))
 	pingAvgArray = np.transpose(np.vstack( (np.array(bbbAvgPingList), np.array(kthAvgPingList), 
@@ -240,12 +240,12 @@ def makePlots(logFileName):
 
 	ax2.plot( data["timestamp"], data["pingAvg"], '.-')		
 	ax2.set_ylabel ( "Avg ping [ms]")
-	ax2.legend ( ['BBB', 'KTH', 'Google'], loc='upper left', prop={'size': 10} )	
+	ax2.legend ( ['BBB/Bahnhof', 'KTH', 'Google'], loc='upper left', prop={'size': 10} )	
 	ax2.xaxis_date()
 
 	ax3.plot( data["timestamp"], data["loss"], '.-' )		
 	ax3.set_ylabel ( "[%]")	
-	ax3.legend ( ['BBB', 'KTH', 'Google'], loc='upper left', prop={'size': 10} )	
+	ax3.legend ( ['BBB/Bahnhof', 'KTH', 'Google'], loc='upper left', prop={'size': 10} )	
 	ax3.set_xlabel("Measurement date")
 	ax3.xaxis_date()		
 	
