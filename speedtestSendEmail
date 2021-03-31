@@ -8,7 +8,7 @@ from email.mime.multipart import MIMEMultipart
 import time
 
 import os
-os.chdir( "/opt/speedtest" )
+#os.chdir( "/opt/speedtest" )
 
 msg = MIMEMultipart()
 

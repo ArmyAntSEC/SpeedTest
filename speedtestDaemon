@@ -269,7 +269,7 @@ logger = logging.getLogger(__name__)
 logger.info ("Program starting")
 
 # Change CWD to where our files are stored
-os.chdir( "/opt/speedtest/" ) 
+#os.chdir( "/opt/speedtest/" ) 
 logger.info ( "Program running in folder: %s", os.getcwd() )
 
 allResults = doAllMeasurements()
