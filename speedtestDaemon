@@ -26,34 +26,22 @@ def doSpeedtestAPI():
 	logger = logging.getLogger(__name__)
 	serversToAskFor = []
 	
-	results = {'downloadMbps': 0, 'uploadMbps': 0 }
+	result = subprocess.check_output( '/opt/bbk/src/cli/cli' );
+#	result = "Start: 2021-03-31 19:34:53\nNetwork operator: Bahnhof AB\nSupport ID: gbg203bb0e43\nLatency:  Latency:       8.954 ms\nDownload: Download:     95.458 Mbit/s\nUpload:   Upload:       95.765 Mbit/s\nMeasurement ID: 375421664";
 
-	try:
-		logger.debug( "Getting configuration" )
-		s = speedtest.Speedtest()	
-		logger.debug( "Asking for list of servers" )
-		s.get_servers(serversToAskFor)		
-		logger.debug( "Selecting best server" )	
-		s.get_best_server()
-		logger.debug( "Measuring download speed" )
-		s.download()
-		logger.debug( "Measuring upload speed" )
-		s.upload()
-		logger.debug( "Speed test complete" )
+	reg = re.compile ( r"Start: (?P<time>.*)\n(.*\n){3}Download: Download:\s+(?P<download>[\d\.]+).*\nUpload:\s+Upload:\s+(?P<upload>[\d\.]+)" );
+	match = reg.search( result, 0 )
+	if match != None:
+		time = match.group( 'time' );
+		download = float(match.group( 'download' ));
+		upload = float(match.group( 'upload' ));
+		logger.debug ( "Download: " + str(download) );
+		logger.debug( "Upload: " + str(upload) );
+	else:
+		logger.error ( "Could not parse BBK output" );
+		logger.error( result )
 
-		results_raw = s.results.dict()
-		
-		downloadMbps = results_raw['download']/(1024.0*1024)
-		uploadMbps = results_raw['upload']/(1024.0*1024)			
-
-		results = {'downloadMbps': downloadMbps, 'uploadMbps': uploadMbps }
-
-	except speedtest.ConfigRetrievalError:
-		logger.error( 'Could not get configuration from speedtest server. No speed measurement possible.' )
-	except:
-		logger.exception( "Unexpected error caught trying to perform speed test" )
-		
-
+	results = {'downloadMbps': download, 'uploadMbps': upload }
 
 	return results
 
@@ -109,8 +97,8 @@ def doHostnameResolution():
 	
 	allOK = False
 	try:
-		response = socket.gethostbyname( 'kth.se' )
-		logger.debug( "Result of resolving kth.se: %s", response )
+		response = socket.gethostbyname( 'ping.sunet.se' )
+		logger.debug( "Result of resolving ping.sunet.se: %s", response )
 		allOK = True	
 	except socket.gaierror:
 		logger.error( "DNS resolution failed. Probably no internet connection." )
@@ -124,14 +112,15 @@ def doHostnameResolution():
 def doAllMeasurements():
 	logger = logging.getLogger(__name__)
 
+	speedMeasurement = doSpeedtestAPI()
+	logger.info ( speedMeasurement )
+
 	dnsOK = doHostnameResolution()
 	logger.info( 'DNS OK: %d', dnsOK )
 
-	pingStats = fpingAndGetStats( ['8.8.8.8', 'kth.se', 'bahnhof.se'] )
+	pingStats = fpingAndGetStats( ['192.168.1.1', '62.63.212.197', 'ping.sunet.se'] )
 	logger.info ( pingStats )
 
-	speedMeasurement = doSpeedtestAPI()
-	logger.info ( speedMeasurement )
 
 	return {'timestamp': datetime.now(), 'dnsOK': dnsOK, 'pingStats': pingStats, 'speedMeasurement': speedMeasurement}
 
@@ -140,16 +129,18 @@ def writeAMeasurementResult( result, logFileName ):
 	outputString = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format( 
 		result["timestamp"].strftime('%Y-%m-%dT%H:%M:%S.%fZ'), 
 		int(result['dnsOK']), 
-		result['pingStats']['bahnhof.se']['loss'],
-		result['pingStats']['bahnhof.se']['avgPing'],
-		result['pingStats']['kth.se']['loss'],
-		result['pingStats']['kth.se']['avgPing'],
-		result['pingStats']['8.8.8.8']['loss'],
-		result['pingStats']['8.8.8.8']['avgPing'],
+		result['pingStats']['192.168.1.1']['loss'],
+		result['pingStats']['192.168.1.1']['avgPing'],
+		result['pingStats']['62.63.212.197']['loss'],
+		result['pingStats']['62.63.212.197']['avgPing'],
+		result['pingStats']['ping.sunet.se']['loss'],
+		result['pingStats']['ping.sunet.se']['avgPing'],
 		result['speedMeasurement']["downloadMbps"], 
 		result['speedMeasurement']["uploadMbps"] )	
+	logger.debug ( outputString );
 		
 	if (os.path.isfile( logFileName) == False):
+		logger.debug ( "Creating a new file" );
 		fout = open( logFileName, 'w')
 		fout.write( 'timestamp\tdnsOK\tbbbLoss\tbbbPingAvg\tkthLoss\tkthPingAvg\tgoogleLoss\tgooglePingAvg\tdownloadMbps\tuploadMbps\n' )
 		fout.close()
@@ -210,7 +201,7 @@ def parseLogFile( logFileName ):
 	
 	fin.close()
 	
-	pingServers = ['bahnhof.se', 'kth.se', '8.8.8.8']
+	pingServers = ['192.168.1.1', '62.63.212.197', 'ping.sunet.se']
 	
 	lossArray = np.transpose(np.vstack( (np.array(bbbLossList), np.array(kthLossList), np.array(googleLossList)) ))
 	pingAvgArray = np.transpose(np.vstack( (np.array(bbbAvgPingList), np.array(kthAvgPingList), 
@@ -240,12 +231,12 @@ def makePlots(logFileName):
 
 	ax2.plot( data["timestamp"], data["pingAvg"], '.-')		
 	ax2.set_ylabel ( "Avg ping [ms]")
-	ax2.legend ( ['BBB/Bahnhof', 'KTH', 'Google'], loc='upper left', prop={'size': 10} )	
+	ax2.legend ( ['Router', 'Gateway', 'Sunet'], loc='upper left', prop={'size': 10} )	
 	ax2.xaxis_date()
 
 	ax3.plot( data["timestamp"], data["loss"], '.-' )		
 	ax3.set_ylabel ( "[%]")	
-	ax3.legend ( ['BBB/Bahnhof', 'KTH', 'Google'], loc='upper left', prop={'size': 10} )	
+	ax3.legend ( ['Router', 'gateway', 'Sunet'], loc='upper left', prop={'size': 10} )	
 	ax3.set_xlabel("Measurement date")
 	ax3.xaxis_date()		
 	
@@ -269,7 +260,7 @@ logger = logging.getLogger(__name__)
 logger.info ("Program starting")
 
 # Change CWD to where our files are stored
-os.chdir( "/opt/speedtest/" ) 
+#os.chdir( "/opt/speedtest/" ) 
 logger.info ( "Program running in folder: %s", os.getcwd() )
 
 allResults = doAllMeasurements()
